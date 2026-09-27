@@ -1,64 +1,63 @@
 import streamlit as st
 import tempfile
+import os
+import glob
 from PIL import Image
 from moviepy.editor import AudioFileClip, ImageClip, concatenate_audioclips
-import os
 
 st.set_page_config(page_title="HORA LUNA", page_icon="🌙")
 st.title("HORA 🌙 - Video 1 Hora")
+st.write("Crea tu video de 1 hora para YouTube")
 
 titulo = st.text_input("Título del video", "Moonlight Dreams - 1 Hour Relaxing Sleep Music")
 
-# AUDIO: busca el mp3 en el repo
-audio_path_repo = "sleep.mp3"
-if os.path.exists(audio_path_repo):
-    st.success(f"Audio encontrado: {audio_path_repo} ✅")
-    audio_file = open(audio_path_repo, "rb")
-    # para que moviepy lo pueda leer, lo guardaremos despues
-    audio_file_bytes = open(audio_path_repo, "rb").read()
-    has_audio = True
-else:
-    st.warning("Sube el sleep.mp3 a GitHub")
-    audio_file = st.file_uploader("Sube tu audio mp3", type=["mp3"])
-    has_audio = audio_file is not None
-    audio_file_bytes = None
-
-# IMAGEN - ya sin bug
+# --- BUSCAR AUDIO: agarra CUALQUIER mp3 que tengas en GitHub ---
 st.write("---")
-st.subheader("Imagen del video")
-imagen_file = st.file_uploader("Sube la imagen bonita que te di (lago + luna)", type=["jpg","jpeg","png","webp"])
+mp3s = glob.glob("*.mp3")
+if mp3s:
+    audio_path_repo = mp3s[0]
+    st.success(f"Audio encontrado: {audio_path_repo} ✅ {os.path.getsize(audio_path_repo)/1024/1024:.2f} MB")
+    has_audio_repo = True
+else:
+    st.warning("No encontré ningún mp3 en GitHub. Súbelo con Add file > Upload")
+    has_audio_repo = False
+    audio_path_repo = None
 
-if st.button("✨ CREAR VIDEO DE 1 HORA"):
-    if not os.path.exists(audio_path_repo) and not audio_file:
-        st.error("Sube primero el sleep.mp3")
+# --- IMAGEN ---
+st.subheader("Imagen del video")
+st.write("Sube la imagen bonita del lago que te di")
+imagen_file = st.file_uploader("Imagen (jpg, png)", type=["jpg","jpeg","png","webp"])
+
+if st.button("✨ CREAR VIDEO DE 1 HORA", type="primary"):
+    if not has_audio_repo and not mp3s:
+        st.error("No hay audio en GitHub. Sube tu mp3 primero")
     else:
-        with st.spinner("Creando tu video de 1 hora... esto tarda 3-5 min, no cierres"):
-            # Guardar audio
+        with st.spinner("Creando tu video de 1 hora... tarda 3-5 min, no cierres la app ⏳"):
+            # Guardar audio temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
-                if audio_file_bytes:
-                    tmp_audio.write(audio_file_bytes)
-                else:
-                    tmp_audio.write(audio_file.read())
+                with open(audio_path_repo, "rb") as f:
+                    tmp_audio.write(f.read())
                 audio_path = tmp_audio.name
 
-            # Guardar imagen - ARREGLADO: si subes imagen, SIEMPRE usa esa
+            # Guardar imagen - SIEMPRE usa la que subas
             if imagen_file is not None:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_img:
-                    tmp_img.write(imagen_file.read())
+                    tmp_img.write(imagen_file.getvalue())
                     img_path = tmp_img.name
-                st.info("Usando tu imagen bonita ✅")
+                st.info("Usando tu imagen bonita del lago ✅")
             else:
-                # solo respaldo si no subiste nada
+                # respaldo solo si no subes nada
                 img = Image.new('RGB', (1280,720), color=(10,15,30))
                 from PIL import ImageDraw
                 draw = ImageDraw.Draw(img)
                 draw.ellipse((900,100,1100,300), fill=(255,230,120))
                 img_path = tempfile.mktemp(suffix=".jpg")
                 img.save(img_path)
-                st.info("No subiste imagen, usando luna simple")
+                st.info("No subiste imagen, usando respaldo amarillo")
 
             try:
                 audio = AudioFileClip(audio_path)
+                # cuantas veces repetir para llegar a 1 hora (3600 seg)
                 loops = int(3600 / audio.duration) + 1
                 final_audio = concatenate_audioclips([audio]*loops).subclip(0, 3600)
 
@@ -68,9 +67,11 @@ if st.button("✨ CREAR VIDEO DE 1 HORA"):
                 output_path = tempfile.mktemp(suffix=".mp4")
                 video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", logger=None)
 
-                st.success("¡Video listo! 🎉")
+                st.success("¡Video de 1 hora listo! 🎉")
                 with open(output_path, "rb") as f:
-                    st.download_button("📥 DESCARGAR VIDEO 1 HORA", f, file_name=f"{titulo}.mp4")
+                    st.download_button("📥 DESCARGAR VIDEO 1 HORA", f, file_name=f"{titulo}.mp4", mime="video/mp4")
+
+                st.balloons()
 
             except Exception as e:
                 st.error(f"Error: {e}")
