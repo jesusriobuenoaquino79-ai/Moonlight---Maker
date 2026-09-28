@@ -11,7 +11,6 @@ except:
     st.error("No hay MP3 en la carpeta")
     st.stop()
 
-# FORMULARIO PARA QUE NO SE BORRE EN CELULAR
 with st.form("form_fotos"):
     st.write("Sube las 2 fotos del video")
     foto1 = st.file_uploader("Foto 1 (0-30 min)", type=["jpg","png","webp"], key="f1_form")
@@ -35,10 +34,11 @@ if boton:
         estado.write("✅ Fotos recibidas")
         barra.progress(30)
 
+        # Redimensionamos con PIL, ya no con MoviePy para evitar error
         for p in [img_path1, img_path2]:
-            im = Image.open(p)
+            im = Image.open(p).convert("RGB")
             im = im.resize((1280, 720))
-            im.save(p)
+            im.save(p, "JPEG")
 
         audio = AudioFileClip(audio_fijo)
         loops = int(3600 / audio.duration) + 1
@@ -47,17 +47,17 @@ if boton:
         estado.write("✅ Audio listo")
         barra.progress(60)
 
-        clip1 = ImageClip(img_path1, duration=1800).resize((1280,720))
-        clip2 = ImageClip(img_path2, duration=1800).resize((1280,720))
-        clip2 = clip2.crossfadein(1)
+        # SIN.resize() - ESTA ES LA CORRECCIÓN
+        clip1 = ImageClip(img_path1, duration=1800)
+        clip2 = ImageClip(img_path2, duration=1800)
         video_final = concatenate_videoclips([clip1, clip2], method="compose")
         video_final = video_final.set_audio(final_audio)
 
-        estado.write("⏳ Renderizando... 4-6 min")
+        estado.write("⏳ Renderizando... 4-6 min, no cierre la app")
         barra.progress(90)
 
         out = tempfile.mktemp(suffix=".mp4")
-        video_final.write_videofile(out, fps=24, preset='ultrafast', threads=4, codec="libx264", audio_codec="aac", logger=None)
+        video_final.write_videofile(out, fps=24, preset='ultrafast', threads=2, codec="libx264", audio_codec="aac", logger=None)
 
         barra.progress(100)
         estado.update(label="¡COMPLETADO! 🎉", state="complete")
