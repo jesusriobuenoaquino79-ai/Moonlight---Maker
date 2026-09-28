@@ -1,6 +1,5 @@
 import streamlit as st, tempfile, glob, os
 from moviepy.editor import *
-from moviepy.video.fx import CrossFadeIn, CrossFadeOut
 from PIL import Image
 
 st.title("🌙 Moonlight Dreams - Video 1 Hora")
@@ -14,7 +13,6 @@ except:
 
 st.write("Sube las 2 fotos del video")
 
-# AHORA FUERA DEL FORM - ASI SI SUBEN EN CELULAR
 foto1 = st.file_uploader("Foto 1 (0-30 min)", type=["jpg","png","webp","jpeg"], key="f1")
 foto2 = st.file_uploader("Foto 2 (30-60 min)", type=["jpg","png","webp","jpeg"], key="f2")
 
@@ -49,13 +47,14 @@ if boton:
         estado.write("✅ Audio listo (1 hora)")
         barra.progress(60)
 
-        clip1 = ImageClip(img_path1, duration=1800).with_effects([CrossFadeOut(1.5)])
-        clip2 = ImageClip(img_path2, duration=1800).with_effects([CrossFadeIn(1.5)])
+        # VIDEO CON FUNDIDO - VERSION COMPATIBLE
+        clip1 = ImageClip(img_path1, duration=1800).fadeout(1.5)
+        clip2 = ImageClip(img_path2, duration=1800).fadein(1.5)
 
         video_final = concatenate_videoclips([clip1, clip2], method="compose", padding=-1.5)
         video_final = video_final.set_audio(final_audio)
 
-        estado.write("⏳ Renderizando... 4-6 min, no cierre la app")
+        estado.write("⏳ Renderizando... 4-6 min")
         barra.progress(90)
 
         out = tempfile.mktemp(suffix=".mp4")
@@ -64,8 +63,8 @@ if boton:
         barra.progress(100)
         estado.update(label="¡COMPLETADO! 🎉", state="complete")
 
-        st.success("¡VIDEO LISTO CON FUNDIDO SUAVE!")
+        st.success("¡VIDEO LISTO!")
         st.balloons()
         st.video(out)
         with open(out,"rb") as f:
-            st.download_button("📥 DESCARGAR VIDEO FINAL", f, file_name="moonlight-luna-llena-1hora.mp4")
+            st.download_button("📥 DESCARGAR VIDEO FINAL", f, file_name="moonlight-1hora.mp4")
