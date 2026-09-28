@@ -1,53 +1,26 @@
 import streamlit as st
 import tempfile
-import os
-import glob
 from moviepy.editor import AudioFileClip, ImageClip, concatenate_audioclips
 
-st.set_page_config(page_title="HORA - Híbrido PRO", page_icon="🌙")
-st.title("🌙 HORA - Versión Híbrida PRO")
-st.write("Usa tu imagen + el audio de GitHub automáticamente")
+st.set_page_config(page_title="CABAÑA LLUVIOSA - 1 HORA", page_icon="🌙")
+st.title("🌙 Cabaña Lluviosa - Video 1 Hora")
+st.write("Sube tu imagen + tu música con lluvia de Flow")
 
-titulo = st.text_input("Título", "Moonlight Dreams - 1 Hour")
-
-# Buscar audio en GitHub (ya lo tienes subido)
-mp3s = glob.glob("*.mp3")
-if mp3s:
-    audio_path_repo = mp3s[0]
-    st.success(f"Audio de GitHub listo: {audio_path_repo} ✅")
-else:
-    audio_path_repo = None
-    st.error("No hay audio en GitHub")
+titulo = st.text_input("Título del video", "Noche de Paz en la Cabaña - 1 Hora")
 
 st.write("---")
-st.subheader("Sube SOLO tu imagen bonita (el audio ya está)")
-imagen_file = st.file_uploader("Imagen del lago", type=["jpg","jpeg","png","webp"])
-
-st.write("---")
-st.write("Si quieres usar otra música diferente, súbela aquí (opcional):")
-audio_file_optional = st.file_uploader("Música opcional (si no subes, uso la de GitHub)", type=["mp3","wav","m4a","ogg"])
+imagen_file = st.file_uploader("1️⃣ Sube tu imagen bonita", type=["jpg","jpeg","png","webp"])
+audio_file = st.file_uploader("2️⃣ Sube tu música MP3 con lluvia", type=["mp3","wav","m4a","ogg"])
 
 if st.button("✨ CREAR VIDEO 1 HORA", type="primary"):
-    if not mp3s and audio_file_optional is None:
-        st.error("No hay audio")
-    elif imagen_file is None:
-        st.error("¡Sube la imagen del lago!")
+    if imagen_file is None or audio_file is None:
+        st.error("¡Falta la imagen o la música! Sube las dos 🙏")
     else:
-        with st.spinner("Creando tu video PRO... 3 min ⏳"):
-            # AUDIO: si sube uno nuevo usa ese, si no usa el de GitHub
-            if audio_file_optional is not None:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
-                    tmp_audio.write(audio_file_optional.getvalue())
-                    audio_path = tmp_audio.name
-                st.info("Usando tu música nueva")
-            else:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
-                    with open(audio_path_repo, "rb") as f:
-                        tmp_audio.write(f.read())
-                    audio_path = tmp_audio.name
-                st.info(f"Usando audio de GitHub: {audio_path_repo}")
+        with st.spinner("Creando tu video de 1 hora... 3 min ⏳"):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
+                tmp_audio.write(audio_file.getvalue())
+                audio_path = tmp_audio.name
 
-            # IMAGEN: la que subiste
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_img:
                 tmp_img.write(imagen_file.getvalue())
                 img_path = tmp_img.name
@@ -60,7 +33,7 @@ if st.button("✨ CREAR VIDEO 1 HORA", type="primary"):
                 video = image_clip.set_audio(final_audio)
                 output_path = tempfile.mktemp(suffix=".mp4")
                 video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", logger=None)
-                st.success("¡VIDEO CON TU IMAGEN DEL LAGO LISTO! 🎉")
+                st.success("¡VIDEO LISTO MI REY! 🎉")
                 with open(output_path, "rb") as f:
                     st.download_button("📥 DESCARGAR VIDEO", f, file_name=f"{titulo}.mp4", mime="video/mp4")
                 st.balloons()
