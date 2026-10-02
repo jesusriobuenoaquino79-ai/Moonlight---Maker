@@ -1,6 +1,6 @@
 import streamlit as st, tempfile, glob, os, subprocess
 from PIL import Image
-from moviepy.editor import AudioFileClip, concatenate_audi audioclips
+from moviepy.editor import AudioFileClip, concatenate_audioclips
 import imageio_ffmpeg
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
@@ -52,7 +52,6 @@ if boton:
         final_audio.close()
 
         barra.progress(40, text="Video parte 1 (optimizado)...")
-        # CAMBIO CLAVE 1: de ultrafast a veryfast + crf 28 (10 veces más liviano)
         subprocess.run([FFMPEG, "-y", "-loop", "1", "-framerate", "24", "-i", img1_path, "-t", "1800", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "28", "-r", "24", v1], check=True)
 
         barra.progress(60, text="Video parte 2 (optimizado)...")
@@ -64,7 +63,6 @@ if boton:
         subprocess.run([FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", lista, "-i", audio_1h, "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", out_temp], check=True)
 
         barra.progress(90, text="Comprimiendo para YouTube (180MB)...")
-        # CAMBIO CLAVE 2: recompresión final para YouTube
         subprocess.run([FFMPEG, "-y", "-i", out_temp, "-c:v", "libx264", "-crf", "28", "-preset", "fast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out_final], check=True)
 
         size_mb = os.path.getsize(out_final) / (1024*1024)
