@@ -2,31 +2,30 @@ import streamlit as st, tempfile, os, subprocess
 from PIL import Image
 import imageio_ffmpeg
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
-st.title("1H HD 1080p LIVIANO - NO SE PEGA")
+st.title("FINAL 2 PASOS - 1H HD 60:00")
 
 mp3 = st.file_uploader("MP3 3min", type=["mp3"])
-f1 = st.file_uploader("Foto1 1920x1080", type=["jpg","png","webp"], key="1")
-f2 = st.file_uploader("Foto2 1920x1080", type=["jpg","png","webp"], key="2")
+f1 = st.file_uploader("Foto1", type=["jpg","png","webp"], key="1")
+f2 = st.file_uploader("Foto2", type=["jpg","png","webp"], key="2")
 
-if st.button("CREAR 1H HD RAPIDO", use_container_width=True):
+if f1 and f2 and mp3 and st.button("CREAR EN 2 PASOS", use_container_width=True):
     with tempfile.TemporaryDirectory() as tmp:
         au = os.path.join(tmp,"a.mp3")
         open(au,"wb").write(mp3.getvalue())
-        i1 = os.path.join(tmp,"1.jpg")
-        i2 = os.path.join(tmp,"2.jpg")
-        def prep(up, out):
-            im = Image.open(up).convert("RGB").resize((1920,1080))
-            im.save(out, "JPEG", quality=95)
-        prep(f1, i1); prep(f2, i2)
-        out = "/tmp/HD_FAST.mp4"
-        st.write("⏳ HD liviano 3-5 min... no cierres")
-        cmd = [FFMPEG,"-y",
-               "-framerate","1","-loop","1","-t","3600","-i", i1,
-               "-framerate","1","-loop","1","-t","3600","-i", i2,
-               "-stream_loop","21","-i", au,
-               "-filter_complex","[0:v]scale=1920:1080[v0];[1:v]scale=1920:1080[v1];[v0][v1]xfade=transition=fade:duration=3:offset=1797,format=yuv420p,fps=30[v]",
-               "-map","[v]","-map","2:a","-t","3600","-c:v","libx264","-crf","20","-preset","veryfast","-r","30","-c:a","aac","-b:a","192k","-movflags","+faststart", out]
-        subprocess.run(cmd, check=True)
-        st.success("✅ LISTO 60 MIN 1080p")
-        st.video(out)
-        st.download_button("📥 DESCARGAR 1H HD 60MIN", open(out,"rb").read(), "1h_HD_60min.mp4", use_container_width=True)
+        i1 = os.path.join(tmp,"1.jpg"); i2 = os.path.join(tmp,"2.jpg")
+        for u,o in [(f1,i1),(f2,i2)]:
+            Image.open(u).convert("RGB").resize((1920,1080)).save(o,"JPEG",quality=90)
+        silent = "/tmp/silent.mp4"
+        final = "/tmp/final_1h_hd.mp4"
+
+        st.write("⏳ Paso 1/2: Video sin audio...")
+        cmd1=[FFMPEG,"-y","-framerate","1","-loop","1","-t","1800","-i",i1,"-framerate","1","-loop","1","-t","1800","-i",i2,"-filter_complex","[0:v]scale=1920:1080[v0];[1:v]scale=1920:1080[v1];[v0][v1]xfade=transition=fade:duration=3:offset=1797,format=yuv420p,fps=30[v]","-map","[v]","-t","3600","-c:v","libx264","-preset","veryfast","-crf","20","-r","30","-an",silent]
+        subprocess.run(cmd1, check=True)
+
+        st.write("⏳ Paso 2/2: Pegando audio 60min...")
+        cmd2=[FFMPEG,"-y","-stream_loop","21","-i",au,"-i",silent,"-t","3600","-map","1:v","-map","0:a","-c:v","copy","-c:a","aac","-b:a","192k","-movflags","+faststart",final]
+        subprocess.run(cmd2, check=True)
+
+        st.success("✅ LISTO 60:00 HD REAL")
+        st.video(final)
+        st.download_button("📥 DESCARGAR", open(final,"rb").read(), "1H_HD_60min.mp4", use_container_width=True)
