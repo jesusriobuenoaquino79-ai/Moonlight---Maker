@@ -1,10 +1,18 @@
-import streamlit as st, tempfile, os, subprocess, json
+import streamlit as st, tempfile, os, subprocess, re
 from PIL import Image
 import imageio_ffmpeg
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
-FFPROBE = imageio_ffmpeg.get_ffprobe_exe()
 
-st.title("ADAPTATIVO - 1, 2, 3 Fotos")
+def get_duracion(path):
+    # saca la duración sin necesidad de FFPROBE
+    result = subprocess.run([FFMPEG, "-i", path], capture_output=True, text=True)
+    m = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", result.stderr)
+    if m:
+        h, mnt, s = m.groups()
+        return int(h)*3600 + int(mnt)*60 + float(s)
+    return 10800 # por si falla, asume 3H
+
+st.title("ADAPTATIVO - 1, 2, 3 Fotos - FIX")
 st.cache_data.clear()
 
 mp3 = st.file_uploader("MP3 Ya Hecho - 1H, 3H, lo que sea", type=["mp3","wav","m4a","ogg"])
@@ -14,13 +22,11 @@ if fotos and mp3 and st.button(f"CREAR VIDEO CON {len(fotos)} FOTO(S)", use_cont
     with tempfile.TemporaryDirectory() as tmp:
         au=os.path.join(tmp,"a.mp3"); open(au,"wb").write(mp3.getvalue())
         
-        # 1. Duración del audio
-        probe = subprocess.run([FFPROBE, "-v", "quiet", "-print_format", "json", "-show_format", au], capture_output=True, text=True)
-        duracion = float(json.loads(probe.stdout)["format"]["duration"])
+        duracion = get_duracion(au)
         por_foto = duracion / len(fotos)
         loops = int(por_foto / 5) - 1
         
-        st.write(f"🎵 Audio: {duracion/60:.1f} min total | {len(fotos)} foto(s) = {por_foto/60:.1f} min cada una")
+        st.write(f"🎵 Audio: {duracion/3600:.2f}H total | {len(fotos)} foto(s) = {por_foto/60:.1f} min cada una")
 
         clips = []
         for idx, f in enumerate(fotos):
