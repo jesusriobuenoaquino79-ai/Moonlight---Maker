@@ -1,50 +1,73 @@
-import streamlit as st, tempfile, os, subprocess, re
-from PIL import Image
-import imageio_ffmpeg
-FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+import streamlit as st
+from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+import tempfile
+import os
 
-def get_duracion(path):
-    # saca la duración sin necesidad de FFPROBE
-    result = subprocess.run([FFMPEG, "-i", path], capture_output=True, text=True)
-    m = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", result.stderr)
-    if m:
-        h, mnt, s = m.groups()
-        return int(h)*3600 + int(mnt)*60 + float(s)
-    return 10800 # por si falla, asume 3H
-
+st.set_page_config(page_title="ADAPTATIVO - 1,2,3 Fotos - FIX", layout="centered")
 st.title("ADAPTATIVO - 1, 2, 3 Fotos - FIX")
-st.cache_data.clear()
+st.write("MP3 Ya Hecho - 1H, 3H, lo que sea")
 
-mp3 = st.file_uploader("MP3 Ya Hecho - 1H, 3H, lo que sea", type=["mp3","wav","m4a","ogg"])
-fotos = st.file_uploader("Sube 1, 2 o 3 Fotos", type=["jpg","png","webp"], accept_multiple_files=True)
+# 1. AUDIO
+audio_file = st.file_uploader("MP3 Ya Hecho", type=["mp3","wav","m4a","ogg"], key="audio")
+st.caption("200MB per file • MP3, WAV, M4A, OGG")
 
-if fotos and mp3 and st.button(f"CREAR VIDEO CON {len(fotos)} FOTO(S)", use_container_width=True):
-    with tempfile.TemporaryDirectory() as tmp:
-        au=os.path.join(tmp,"a.mp3"); open(au,"wb").write(mp3.getvalue())
-        
-        duracion = get_duracion(au)
-        por_foto = duracion / len(fotos)
-        loops = int(por_foto / 5) - 1
-        
-        st.write(f"🎵 Audio: {duracion/3600:.2f}H total | {len(fotos)} foto(s) = {por_foto/60:.1f} min cada una")
+# 2. FOTOS
+fotos = st.file_uploader("Sube 1, 2 o 3 Fotos", type=["jpg","png","webp","jpeg"], 
+                         accept_multiple_files=True, key="fotos")
+st.caption("200MB per file • JPG, PNG, WEBP")
 
-        clips = []
-        for idx, f in enumerate(fotos):
-            st.write(f"⏳ {idx+1}/{len(fotos)}: Procesando foto {idx+1}...")
-            img_path = os.path.join(tmp, f"{idx}.jpg")
-            Image.open(f).convert("RGB").resize((1280,720)).save(img_path,"JPEG",quality=80)
-            
-            v5 = os.path.join(tmp, f"v{idx}_5.mp4")
-            v_full = os.path.join(tmp, f"v{idx}.mp4")
-            subprocess.run([FFMPEG,"-y","-loop","1","-i",img_path,"-t","5","-vf","format=yuv420p","-r","24","-c:v","libx264","-preset","ultrafast",v5], check=True)
-            subprocess.run([FFMPEG,"-y","-stream_loop",str(loops),"-i",v5,"-c","copy",v_full], check=True)
-            clips.append(v_full)
+if audio_file and fotos:
+    st.info(f"Audio: {audio_file.name} | Fotos: {len(fotos)}")
+    
+    if len(fotos) > 3:
+        st.error("Solo máximo 3 fotos")
+    else:
+        if st.button("Generar Video con FADE", type="primary"):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # Guardar audio
+                audio_path = os.path.join(tmpdir, "audio.mp3")
+                with open(audio_path, "wb") as f:
+                    f.write(audio_file.read())
+                
+                audio = AudioFileClip(audio_path)
+                duracion_total = audio.duration
+                st.write(f"Duración audio: {duracion_total/3600:.2f} horas")
 
-        silent="/tmp/silent.mp4"; final="/tmp/final.mp4"
-        lst=os.path.join(tmp,"list.txt"); open(lst,"w").write("\n".join([f"file '{c}'" for c in clips]))
-        subprocess.run([FFMPEG,"-y","-f","concat","-safe","0","-i",lst,"-c","copy",silent], check=True)
-        subprocess.run([FFMPEG,"-y","-i",au,"-i",silent,"-t",str(duracion),"-map","1:v","-map","0:a","-c:v","copy","-c:a","aac","-b:a","128k","-movflags","+faststart",final], check=True)
+                # Guardar imagenes
+                img_paths = []
+                for i, f in enumerate(fotos):
+                    p = os.path.join(tmpdir, f"img_{i}.jpg")
+                    with open(p, "wb") as out:
+                        out.write(f.read())
+                    img_paths.append(p)
 
-        st.success(f"✅ LISTO {duracion/3600:.2f}H CON {len(fotos)} FOTO(S)")
-        st.video(final)
-        st.download_button(f"📥 DESCARGAR {duracion/3600:.1f}H", open(final,"rb").read(), f"video_{len(fotos)}fotos_{duracion/60:.0f}min.mp4", use_container_width=True)
+                # Crear clips repartidos
+                num = len(img_paths)
+                dur_por_foto = duracion_total / num
+                fade = 1.5  # segundos de fade entre imagen e imagen
+
+                clips = []
+                for path in img_paths:
+                    clips.append(ImageClip(path).set_duration(dur_por_foto))
+
+                # Concatenar con crossfade
+                if num == 1:
+                    video_final = clips[0]
+                else:
+                    # video con fade
+                    video_final = concatenate_videoclips(clips, method="compose")
+                    # Para el fade suave usamos crossfade
+                    # Truco: ponemos cada clip con crossfadein excepto el primero
+                    final_clips = [clips[0]]
+                    for c in clips[1:]:
+                        final_clips.append(c.crossfadein(fade))
+                    video_final = concatenate_videoclips(final_clips, method="compose", padding=-fade)
+
+                video_final = video_final.set_audio(audio).set_duration(duracion_total)
+                
+                output_path = os.path.join(tmpdir, "video_final.mp4")
+                video_final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+                
+                st.success("Video listo!")
+                with open(output_path, "rb") as vf:
+                    st.download_button("Descargar Video MP4", vf, file_name="moonlight_3h_fade.mp4")
