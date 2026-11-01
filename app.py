@@ -1,19 +1,18 @@
 import streamlit as st
-import tempfile, os, subprocess, shutil
+import tempfile, subprocess
 from pathlib import Path
 import imageio_ffmpeg
 
-st.set_page_config(page_title="Moonlight Maker V3 - Black Screen")
-st.title("Moonlight Maker V3 - 1:30 imagen + Black Screen")
+st.set_page_config(page_title="Moonlight Maker V3 - 12s Black Screen")
+st.title("Moonlight Maker V3 - 12s imagen + Black Screen")
 
-# 1. Obtener ffmpeg
 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
 image_file = st.file_uploader("1. Sube tu imagen de la ventana (la de la luna)", type=["png","jpg","jpeg"])
-audio_file = st.file_uploader("2. Sube tu audio de Canva/Suno (29:58 o el que tengas)", type=["mp3","wav","m4a","aac"])
+audio_file = st.file_uploader("2. Sube tu audio de Canva/Suno (29s)", type=["mp3","wav","m4a","aac"])
 
 target_hours = st.number_input("Duración final en horas", value=3.0, min_value=0.5, max_value=12.0, step=0.5)
-image_duration = st.number_input("Segundos con imagen al inicio", value=90, min_value=30, max_value=180, help="90 = 1 minuto 30 segundos")
+image_duration = st.number_input("Segundos con imagen al inicio", value=12, min_value=5, max_value=30, help="12 segundos es lo ideal")
 
 if st.button("Crear video 3 HORAS") and image_file and audio_file:
     with tempfile.TemporaryDirectory() as tmp:
@@ -28,10 +27,10 @@ if st.button("Crear video 3 HORAS") and image_file and audio_file:
         total_seconds = int(target_hours * 3600)
         black_seconds = total_seconds - image_duration
         
-        st.info(f"Creando: {image_duration}s con imagen + {black_seconds}s en negro = {total_seconds}s total. Esto va a ser rápido...")
+        st.info(f"Creando: {image_duration}s con imagen + {black_seconds}s en negro = {total_seconds}s total")
         progress = st.progress(0)
 
-        # PASO 1: Video de 90s con tu imagen + audio (con fundido a negro al final de 2 seg)
+        # PASO 1: Video de 12s con tu imagen + fundido a negro
         part1 = tmp_path / "part1.mp4"
         cmd1 = [
             ffmpeg_exe, "-y",
@@ -46,23 +45,23 @@ if st.button("Crear video 3 HORAS") and image_file and audio_file:
         subprocess.run(cmd1, check=True)
         progress.progress(30)
 
-        # PASO 2: Video negro de 2h58m con el mismo audio en loop
+        # PASO 2: Video negro con audio en loop
         part2 = tmp_path / "part2.mp4"
         cmd2 = [
             ffmpeg_exe, "-y",
             "-f", "lavfi", "-i", f"color=c=black:s=1920x1080:r=30:d={black_seconds}",
             "-i", str(audio_path),
-            "-filter_complex", f"[1:a]aloop=loop=-1:size=2e+09[a]",
+            "-filter_complex", "[1:a]aloop=loop=-1:size=2e+09[a]",
             "-map", "0:v", "-map", "[a]",
             "-t", str(black_seconds),
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-shortest",
+            "-c:a", "aac",
             str(part2)
         ]
         subprocess.run(cmd2, check=True)
         progress.progress(70)
 
-        # PASO 3: Unir los dos sin re-codificar (rapidísimo)
+        # PASO 3: Unir
         list_file = tmp_path / "list.txt"
         list_file.write_text(f"file '{part1}'\nfile '{part2}'\n")
         cmd3 = [
@@ -75,7 +74,7 @@ if st.button("Crear video 3 HORAS") and image_file and audio_file:
         subprocess.run(cmd3, check=True)
         progress.progress(100)
         
-        st.success("¡Listo! Video de 3 horas creado.")
+        st.success(f"¡Listo! Video de {target_hours}h creado. 12s iluminado + resto en negro.")
         st.video(str(out_path))
         with open(out_path, "rb") as f:
-            st.download_button("DESCARGAR VIDEO 3H", f, file_name=f"moonlight_{int(target_hours)}h_blackscreen.mp4")
+            st.download_button("DESCARGAR VIDEO", f, file_name=f"moonlight_{int(target_hours)}h_12s.mp4")
