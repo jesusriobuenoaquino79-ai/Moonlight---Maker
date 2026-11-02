@@ -3,91 +3,65 @@ import tempfile, subprocess
 from pathlib import Path
 import imageio_ffmpeg
 
-st.set_page_config(page_title="Video Maker V8 - Final Rapido")
+st.set_page_config(page_title="Moonlight V9.1 FINAL")
 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-st.title("Video Maker V8 - Final")
+st.title("Moonlight FINAL - 12s + 3H Negro")
 
-destino = st.radio("¿Para qué canal?", ["Moonlight Dreams - 12s + 3H Negro (RÁPIDO)", "Cabaña - Video 29:58 + 1 Foto = 1H"])
+video_file = st.file_uploader("Sube tu video de Canva (mp4)", type=["mp4","mov"])
 
-st.divider()
+if st.button("Crear 3H FINAL sin corte") and video_file:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        input_video = tmp_path / "input.mp4"
+        out_path = tmp_path / "final_3h.mp4"
+        input_video.write_bytes(video_file.read())
+        
+        total = 10800 # 3 horas
+        primeros = 12
+        
+        bar = st.progress(0)
+        st.info("1. Creando audio continuo de 3h sin cortes...")
 
-if destino == "Moonlight Dreams - 12s + 3H Negro (RÁPIDO)":
-    st.success("MODO BLACK SCREEN - Sin fade, ultra rápido")
-    st.write("Subes tu video de Canva y te saco 12s + resto negro 3h")
-    
-    video_file = st.file_uploader("Sube tu VIDEO de Canva (mp4)", type=["mp4","mov"], key="moon")
+        # PASO 1: UN SOLO AUDIO DE 3H CONTINUO - Así no se corta a los 12s
+        full_audio = tmp_path / "full_audio.aac"
+        subprocess.run([
+            ffmpeg_exe, "-y", "-i", str(input_video),
+            "-filter_complex", "[0:a]aloop=loop=-1:size=2e+09[a]",
+            "-map", "[a]", "-t", str(total), "-c:a", "aac", "-ar", "48000",
+            str(full_audio)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        bar.progress(40)
 
-    if st.button("Crear 3H Black Screen") and video_file:
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            input_video = tmp_path / "input.mp4"
-            out_path = tmp_path / "final_3h.mp4"
-            input_video.write_bytes(video_file.read())
-            
-            image_duration = 12
-            total_seconds = 10800
-            black_seconds = total_seconds - image_duration
-            
-            bar = st.progress(0)
-            st.info(f"{image_duration}s con imagen + {black_seconds}s negro = 3H. Sin renderizar, 10 segundos.")
+        st.info("2. Creando video: 12s tuyos + negro...")
+        # PASO 2: Video de 12s solo video sin audio
+        part1_v = tmp_path / "p1_v.mp4"
+        subprocess.run([ffmpeg_exe, "-y", "-i", str(input_video), "-t", str(primeros), "-an", "-c:v", "libx264", "-preset", "ultrafast", str(part1_v)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Video negro del resto del tiempo
+        black_v = tmp_path / "black_v.mp4"
+        subprocess.run([ffmpeg_exe, "-y", "-f", "lavfi", "-i", f"color=c=black:s=1920x1080:r=30:d={total-primeros}", "-t", str(total-primeros), "-c:v", "libx264", "-preset", "ultrafast", str(black_v)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-            part1 = tmp_path / "part1.mp4"
-            subprocess.run([ffmpeg_exe, "-y", "-i", str(input_video), "-t", str(image_duration), "-c", "copy", str(part1)], check=True)
-            bar.progress(30)
+        # Unimos los 2 videos sin audio
+        list_txt = tmp_path / "list.txt"
+        list_txt.write_text(f"file '{part1_v}'\nfile '{black_v}'\n")
+        video_sin_audio = tmp_path / "video_sin_audio.mp4"
+        subprocess.run([ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(list_txt), "-c", "copy", str(video_sin_audio)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        bar.progress(80)
 
-            audio_loop = tmp_path / "audio.aac"
-            subprocess.run([ffmpeg_exe, "-y", "-i", str(input_video), "-filter_complex", "[0:a]aloop=loop=-1:size=2e+09[a]", "-map", "[a]", "-t", str(black_seconds), "-c:a", "aac", str(audio_loop)], check=True)
-            bar.progress(60)
-
-            black_one_sec = tmp_path / "black1s.mp4"
-            subprocess.run([ffmpeg_exe, "-y", "-f", "lavfi", "-i", "color=c=black:s=1920x1080:r=30:d=1", "-c:v", "libx264", "-preset", "ultrafast", "-t", "1", str(black_one_sec)], check=True)
-            
-            black_long = tmp_path / "black_long.mp4"
-            subprocess.run([ffmpeg_exe, "-y", "-stream_loop", str(black_seconds-1), "-i", str(black_one_sec), "-i", str(audio_loop), "-t", str(black_seconds), "-c", "copy", str(black_long)], check=True)
-            bar.progress(85)
-
-            list_file = tmp_path / "list.txt"
-            list_file.write_text(f"file '{part1}'\nfile '{black_long}'\n")
-            subprocess.run([ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", str(out_path)], check=True)
-            bar.progress(100)
-
-            st.success("Listo Moonlight 3H Black Screen - Sin fade")
-            with open(out_path, "rb") as f:
-                st.download_button("DESCARGAR 3H", f, file_name="moonlight_3h_black_fast.mp4")
-
-else:
-    st.subheader("Cabaña - Video 29:58 + 1 Foto = 1 Hora (CON FADE)")
-    st.write("Este SÍ lleva fade, porque es de imagen a imagen")
-    
-    video_file = st.file_uploader("Video 29:58 con imagen 1", type=["mp4","mov"], key="cab_v")
-    img2 = st.file_uploader("Segunda foto", type=["jpg","png","jpeg"], key="cab_i2")
-
-    if st.button("Crear 1H Cabaña") and video_file and img2:
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            input_video = tmp_path / "input.mp4"
-            p2 = tmp_path / "img2.jpg"
-            out_path = tmp_path / "final_1h.mp4"
-            input_video.write_bytes(video_file.read())
-            p2.write_bytes(img2.read())
-
-            st.info("Creando 1H con fade entre las 2 imágenes")
-            cmd = [
-                ffmpeg_exe, "-y",
-                "-i", str(input_video),
-                "-loop", "1", "-t", "1798", "-i", str(p2),
-                "-filter_complex",
-                "[0:v]fade=t=out:st=1796:d=2[v0];"
-                "[1:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,zoompan=z='min(zoom+0.0002,1.3)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',fade=t=in:st=0:d=2,fps=30[v1];"
-                "[v0][v1]concat=n=2:v=1:a=0[v];"
-                "[0:a]aloop=loop=-1:size=2e+09[a]",
-                "-map", "[v]", "-map", "[a]",
-                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-shortest", "-t", "3596",
-                str(out_path)
-            ]
-            subprocess.run(cmd, check=True)
-            st.success("Listo Cabaña 1H con fade")
-            with open(out_path, "rb") as f:
-                st.download_button("DESCARGAR 1H CABAÑA", f, file_name="cabana_1h_fade.mp4")
+        st.info("3. Uniendo todo...")
+        # PASO 3: Juntar video completo + audio continuo
+        subprocess.run([
+            ffmpeg_exe, "-y",
+            "-i", str(video_sin_audio),
+            "-i", str(full_audio),
+            "-map", "0:v", "-map", "1:a",
+            "-c", "copy", "-t", str(total),
+            str(out_path)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        bar.progress(100)
+        st.success("¡Listo! 12s + negro 3H sin corte de música.")
+        
+        with open(out_path, "rb") as f:
+            st.download_button("DESCARGAR VIDEO FINAL 3H", f, file_name="moonlight_12s_black_3h_FINAL.mp4")
