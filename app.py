@@ -3,14 +3,14 @@ import tempfile, subprocess
 from pathlib import Path
 import imageio_ffmpeg
 
-st.set_page_config(page_title="Moonlight V9.1 FINAL")
+st.set_page_config(page_title="Moonlight V10 SIMPLE")
 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-st.title("Moonlight FINAL - 12s + 3H Negro")
+st.title("Moonlight V10 - De 30min a 3H")
 
-video_file = st.file_uploader("Sube tu video de Canva (mp4)", type=["mp4","mov"])
+video_file = st.file_uploader("Sube tu video de 30min (mp4)", type=["mp4","mov"])
 
-if st.button("Crear 3H FINAL sin corte") and video_file:
+if st.button("Crear 3H FINAL") and video_file:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         input_video = tmp_path / "input.mp4"
@@ -19,49 +19,39 @@ if st.button("Crear 3H FINAL sin corte") and video_file:
         
         total = 10800 # 3 horas
         primeros = 12
-        
-        bar = st.progress(0)
-        st.info("1. Creando audio continuo de 3h sin cortes...")
 
-        # PASO 1: UN SOLO AUDIO DE 3H CONTINUO - Así no se corta a los 12s
-        full_audio = tmp_path / "full_audio.aac"
-        subprocess.run([
-            ffmpeg_exe, "-y", "-i", str(input_video),
-            "-filter_complex", "[0:a]aloop=loop=-1:size=2e+09[a]",
-            "-map", "[a]", "-t", str(total), "-c:a", "aac", "-ar", "48000",
-            str(full_audio)
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        bar.progress(40)
+        st.info("Paso 1: sacando el audio de tus 30 min...")
+        audio_file = tmp_path / "audio.aac"
+        r1 = subprocess.run([ffmpeg_exe, "-y", "-i", str(input_video), "-vn", "-c:a", "aac", "-b:a", "128k", str(audio_file)], capture_output=True, text=True)
+        if r1.returncode != 0:
+            st.error("Falló sacando audio:")
+            st.code(r1.stderr[-2000:])
+            st.stop()
 
-        st.info("2. Creando video: 12s tuyos + negro...")
-        # PASO 2: Video de 12s solo video sin audio
-        part1_v = tmp_path / "p1_v.mp4"
-        subprocess.run([ffmpeg_exe, "-y", "-i", str(input_video), "-t", str(primeros), "-an", "-c:v", "libx264", "-preset", "ultrafast", str(part1_v)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Video negro del resto del tiempo
-        black_v = tmp_path / "black_v.mp4"
-        subprocess.run([ffmpeg_exe, "-y", "-f", "lavfi", "-i", f"color=c=black:s=1920x1080:r=30:d={total-primeros}", "-t", str(total-primeros), "-c:v", "libx264", "-preset", "ultrafast", str(black_v)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # Unimos los 2 videos sin audio
-        list_txt = tmp_path / "list.txt"
-        list_txt.write_text(f"file '{part1_v}'\nfile '{black_v}'\n")
-        video_sin_audio = tmp_path / "video_sin_audio.mp4"
-        subprocess.run([ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(list_txt), "-c", "copy", str(video_sin_audio)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        bar.progress(80)
-
-        st.info("3. Uniendo todo...")
-        # PASO 3: Juntar video completo + audio continuo
-        subprocess.run([
+        st.info("Paso 2: creando 12s + negro + audio x6 (3h)... esto tarda 2-3 min, no le des click otra vez")
+        # -stream_loop 5 = repite el audio 6 veces en total (30min x 6 = 180min = 3h)
+        cmd = [
             ffmpeg_exe, "-y",
-            "-i", str(video_sin_audio),
-            "-i", str(full_audio),
-            "-map", "0:v", "-map", "1:a",
-            "-c", "copy", "-t", str(total),
+            "-i", str(input_video),
+            "-stream_loop", "5", "-i", str(audio_file),
+            "-f", "lavfi", "-i", f"color=c=black:s=1280x720:r=5:d={total-primeros}",
+            "-filter_complex",
+            f"[0:v]trim=0:{primeros},setpts=PTS-STARTPTS,scale=1280:720,fps=30[v1];"
+            f"[2:v]setpts=PTS-STARTPTS[v2];"
+            f"[v1][v2]concat=n=2:v=1:a=0,format=yuv420p[vout]",
+            "-map", "[vout]",
+            "-map", "1:a",
+            "-t", str(total),
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "copy",
+            "-shortest",
             str(out_path)
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        bar.progress(100)
-        st.success("¡Listo! 12s + negro 3H sin corte de música.")
-        
-        with open(out_path, "rb") as f:
-            st.download_button("DESCARGAR VIDEO FINAL 3H", f, file_name="moonlight_12s_black_3h_FINAL.mp4")
+        ]
+        r2 = subprocess.run(cmd, capture_output=True, text=True)
+        if r2.returncode != 0:
+            st.error("Falló creando video:")
+            st.code(r2.stderr[-3000:])
+        else:
+            st.success("¡Listo! 3H creado.")
+            with open(out_path, "rb") as f:
+                st.download_button("DESCARGAR VIDEO FINAL 3H", f, file_name="moonlight_3h_FINAL.mp4")
